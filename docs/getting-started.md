@@ -21,7 +21,7 @@ Run `nvm use`, `pnpm install --frozen-lockfile`, and `pnpm pack`. Install the
 resulting tarball alongside Kysely and pg.
 
 ```sh
-pnpm add /path/to/bitkidd-kysely-graph-0.1.0.tgz kysely pg
+pnpm add /path/to/bitkidd-kysely-graph-0.1.1.tgz kysely pg
 ```
 
 Install `@types/pg` as a development dependency when using pg in TypeScript.
