@@ -1,4 +1,4 @@
-name: Check and publish to npm
+name: Check and stage npm releases
 
 on:
   pull_request:
@@ -67,7 +67,7 @@ jobs:
           path: ${{ runner.temp }}/package.tgz
           if-no-files-found: error
 
-  publish:
+  stage:
     if: github.ref_type == 'tag'
     needs: check
     runs-on: ubuntu-latest
@@ -79,7 +79,6 @@ jobs:
         with:
           node-version: '24'
           check-latest: true
-          registry-url: https://registry.npmjs.org
           package-manager-cache: false
       - uses: pnpm/action-setup@v6
         with:
@@ -87,8 +86,7 @@ jobs:
       - uses: actions/download-artifact@v8
         with:
           name: npm-package
-      - name: Publish the tested tarball
-        run: pnpm publish ./package.tgz --tag "$NPM_DIST_TAG"
+      - name: Stage the tested tarball on npm
+        run: pnpm stage publish ./package.tgz --tag "$NPM_DIST_TAG"
         env:
           NPM_DIST_TAG: ${{ needs.check.outputs.dist-tag }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}

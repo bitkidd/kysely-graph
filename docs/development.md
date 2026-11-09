@@ -66,18 +66,35 @@ JSON scalar types, diagnostics, transactions and exact TypeScript inference.
 
 The GitHub workflow runs `pnpm run check` and the PostgreSQL 17 suite on pull
 requests, pushes to `main`, and version tags. A tag must match `v` followed by
-the version in `package.json`. The publish job uses `pnpm publish` to upload
-the tested tarball to npm. Stable versions use the `latest` dist-tag and prereleases use `next`.
+the version in `package.json`. On a matching tag, the staging job uploads the
+tested tarball with `pnpm stage publish` and prints its stage ID. Stable
+versions are staged with the `latest` dist-tag and prereleases with `next`.
+The version becomes installable after maintainer approval.
+[pnpm stage](https://pnpm.io/cli/stage)
 
-Configure a GitHub Actions trusted publisher in the npm package settings with
-the GitHub repository owner and name, the filename `npm.yml`, and permission
-to publish. The workflow adds the repository URL to the tarball for npm
-provenance. [npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
+### Configure the trusted publisher
 
-npm requires the package to exist before you can configure a trusted publisher.
-For the first release, set the GitHub secret `NPM_BOOTSTRAP_TOKEN` to a granular
-npm token with permission to create and publish under `@bitkidd` and with 2FA
-bypass enabled. Remove the secret after configuring trusted publishing.
-[npm publishing requirements](https://docs.npmjs.com/creating-and-publishing-scoped-public-packages/)
+In the npm settings for `@bitkidd/kysely-graph`, add a GitHub Actions trusted
+publisher with user `bitkidd`, repository `kysely-graph`, and workflow filename
+`npm.yml`. Leave direct publishing and dist-tag management unchecked. The
+workflow authenticates with GitHub's OIDC identity and includes the repository
+URL in the tarball for provenance.
+[npm trusted publishing](https://docs.npmjs.com/trusted-publishers/)
+
+### Review and approve each release
+
+1. Push a version tag that matches the committed `package.json`.
+2. Wait for the **Stage the tested tarball on npm** step to succeed.
+3. Open **Staged Packages** on npmjs.com, select the version, review it, and
+   approve it with 2FA. [npm staged publishing](https://docs.npmjs.com/staged-publishing/)
+
+To review and approve from the terminal, use the stage ID from the workflow
+log or from `pnpm stage list`.
+
+```sh
+pnpm stage list @bitkidd/kysely-graph
+pnpm stage view <stage-id>
+pnpm stage approve <stage-id>
+```
 
 [Documentation index](README.md)
