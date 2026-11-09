@@ -1,0 +1,59 @@
+{
+  "name": "@bitkidd/kysely-graph",
+  "version": "0.1.0",
+  "description": "Typed nested PostgreSQL queries for Kysely",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/bitkidd/kysely-graph.git"
+  },
+  "files": [
+    "dist",
+    "docs",
+    "README.md"
+  ],
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "registry": "https://registry.npmjs.org/"
+  },
+  "scripts": {
+    "build": "node scripts/clean.mjs && tsc -p tsconfig.build.json",
+    "prepack": "pnpm run build",
+    "typecheck": "tsc --noEmit",
+    "test": "node --import tsx tests/relations.test.ts",
+    "check": "pnpm run format:check && pnpm run lint && pnpm run typecheck && pnpm test && pnpm run build",
+    "test:postgres": "DATABASE_URL=${DATABASE_URL:?Set DATABASE_URL to a disposable PostgreSQL database} pnpm test",
+    "bench": "node --expose-gc --import tsx benchmarks/run.ts",
+    "bench:profile": "node --expose-gc --import tsx benchmarks/profile.ts",
+    "format": "pnpm run lint:fix && oxfmt --write .",
+    "format:check": "oxfmt --check .",
+    "lint": "oxlint --deny-warnings .",
+    "lint:fix": "oxlint --fix --deny-warnings ."
+  },
+  "devDependencies": {
+    "@electric-sql/pglite": "^0.5.15",
+    "@types/node": "^24.19.2",
+    "@types/pg": "^8.15.0",
+    "kysely": "^0.29.2",
+    "oxfmt": "^0.77.0",
+    "oxlint": "^1.92.0",
+    "pg": "^8.16.0",
+    "tsx": "^4.20.0",
+    "typescript": "^7.0.2"
+  },
+  "peerDependencies": {
+    "kysely": "^0.29.2"
+  },
+  "engines": {
+    "node": "24.x"
+  },
+  "packageManager": "pnpm@12.5.1"
+}

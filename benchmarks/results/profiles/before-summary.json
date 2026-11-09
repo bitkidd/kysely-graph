@@ -1,0 +1,102 @@
+[
+  {
+    "frame": "(idle) @ :0",
+    "sampledSelfMs": 886
+  },
+  {
+    "frame": "(garbage collector) @ :0",
+    "sampledSelfMs": 515
+  },
+  {
+    "frame": "cloneGraph @ baseline/assemble.ts:1",
+    "sampledSelfMs": 484
+  },
+  {
+    "frame": "attach @ baseline/assemble.ts:1",
+    "sampledSelfMs": 448
+  },
+  {
+    "frame": "tupleKey @ baseline/planner.ts:1",
+    "sampledSelfMs": 263
+  },
+  {
+    "frame": "utf8Slice @ :0",
+    "sampledSelfMs": 183
+  },
+  {
+    "frame": "(anonymous) @ baseline/execute.ts:1",
+    "sampledSelfMs": 142
+  },
+  {
+    "frame": "collect @ baseline/planner.ts:1",
+    "sampledSelfMs": 103
+  },
+  {
+    "frame": "(anonymous) @ baseline/assemble.ts:1",
+    "sampledSelfMs": 90
+  },
+  {
+    "frame": "toString @ node:buffer:918",
+    "sampledSelfMs": 82
+  },
+  {
+    "frame": "freeze @ util/object-utils.js:62",
+    "sampledSelfMs": 76
+  },
+  {
+    "frame": "parseInteger @ lib/textParsers.js:109",
+    "sampledSelfMs": 74
+  },
+  {
+    "frame": "post @ node:inspector:115",
+    "sampledSelfMs": 73
+  },
+  {
+    "frame": "parseDataRowMessage @ dist/parser.js:228",
+    "sampledSelfMs": 72
+  },
+  {
+    "frame": "parseRow @ lib/result.js:63",
+    "sampledSelfMs": 71
+  },
+  {
+    "frame": "(anonymous) @ baseline/planner.ts:1",
+    "sampledSelfMs": 67
+  },
+  {
+    "frame": "visitNode @ operation-node/operation-node-visitor.js:110",
+    "sampledSelfMs": 61
+  },
+  {
+    "frame": "(anonymous) @ baseline/loader.ts:1",
+    "sampledSelfMs": 58
+  },
+  {
+    "frame": "handlePacket @ dist/parser.js:91",
+    "sampledSelfMs": 43
+  },
+  {
+    "frame": "parse @ dist/parser.js:26",
+    "sampledSelfMs": 42
+  },
+  {
+    "frame": "visitRaw @ query-compiler/default-query-compiler.js:364",
+    "sampledSelfMs": 39
+  },
+  {
+    "frame": "_handleDataRow @ lib/client.js:455",
+    "sampledSelfMs": 38
+  },
+  {
+    "frame": "(anonymous) @ :0",
+    "sampledSelfMs": 37
+  },
+  {
+    "frame": "emit @ node:events:489",
+    "sampledSelfMs": 35
+  },
+  {
+    "frame": "writev @ :0",
+    "sampledSelfMs": 33
+  }
+]

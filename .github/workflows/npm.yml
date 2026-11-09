@@ -1,0 +1,94 @@
+name: Check and publish to npm
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+    tags: ['v*']
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    outputs:
+      dist-tag: ${{ steps.pack.outputs.dist-tag }}
+      pnpm-version: ${{ steps.pack.outputs.pnpm-version }}
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: relations_test
+        ports:
+          - 5432/tcp
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@v7
+        with:
+          node-version-file: .node-version
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run check
+      - run: pnpm run test:postgres
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@127.0.0.1:${{ job.services.postgres.ports[5432] }}/relations_test
+      - name: Pack the tagged version
+        if: github.ref_type == 'tag'
+        id: pack
+        run: |
+          version=$(node -p 'require("./package.json").version')
+          if [ "$GITHUB_REF_NAME" != "v$version" ]; then
+            echo "Expected tag v$version, got $GITHUB_REF_NAME" >&2
+            exit 1
+          fi
+
+          case "${version%%+*}" in
+            *-*) echo 'dist-tag=next' >> "$GITHUB_OUTPUT" ;;
+            *) echo 'dist-tag=latest' >> "$GITHUB_OUTPUT" ;;
+          esac
+
+          printf 'pnpm-version=%s\n' "$(pnpm --version)" >> "$GITHUB_OUTPUT"
+          pnpm pkg set repository.type=git "repository.url=git+$GITHUB_SERVER_URL/$GITHUB_REPOSITORY.git"
+          pnpm pack --ignore-scripts --out "$RUNNER_TEMP/package.tgz"
+      - uses: actions/upload-artifact@v7
+        if: github.ref_type == 'tag'
+        with:
+          name: npm-package
+          path: ${{ runner.temp }}/package.tgz
+          if-no-files-found: error
+
+  publish:
+    if: github.ref_type == 'tag'
+    needs: check
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+    steps:
+      - uses: actions/setup-node@v7
+        with:
+          node-version: '24'
+          check-latest: true
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - uses: pnpm/action-setup@v6
+        with:
+          version: ${{ needs.check.outputs.pnpm-version }}
+      - uses: actions/download-artifact@v8
+        with:
+          name: npm-package
+      - name: Publish the tested tarball
+        run: pnpm publish ./package.tgz --tag "$NPM_DIST_TAG"
+        env:
+          NPM_DIST_TAG: ${{ needs.check.outputs.dist-tag }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_BOOTSTRAP_TOKEN }}

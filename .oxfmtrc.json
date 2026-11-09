@@ -1,0 +1,14 @@
+{
+  "$schema": "./node_modules/oxfmt/configuration_schema.json",
+  "singleQuote": true,
+  "jsxSingleQuote": true,
+  "sortImports": true,
+  "ignorePatterns": [
+    "dist/**",
+    "benchmarks/baseline/**",
+    "benchmarks/results/**",
+    "docs/assets/**",
+    "pnpm-lock.yaml",
+    "benchmarks/batched/**"
+  ]
+}

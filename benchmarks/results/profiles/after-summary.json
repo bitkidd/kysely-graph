@@ -1,0 +1,102 @@
+[
+  {
+    "frame": "(idle) @ :0",
+    "sampledSelfMs": 932
+  },
+  {
+    "frame": "(garbage collector) @ :0",
+    "sampledSelfMs": 202
+  },
+  {
+    "frame": "utf8Slice @ :0",
+    "sampledSelfMs": 156
+  },
+  {
+    "frame": "(anonymous) @ src/execute.ts:1",
+    "sampledSelfMs": 124
+  },
+  {
+    "frame": "(anonymous) @ src/loader.ts:1",
+    "sampledSelfMs": 115
+  },
+  {
+    "frame": "parseInteger @ lib/textParsers.js:109",
+    "sampledSelfMs": 82
+  },
+  {
+    "frame": "parseRow @ lib/result.js:63",
+    "sampledSelfMs": 81
+  },
+  {
+    "frame": "toString @ node:buffer:918",
+    "sampledSelfMs": 79
+  },
+  {
+    "frame": "post @ node:inspector:115",
+    "sampledSelfMs": 71
+  },
+  {
+    "frame": "freeze @ util/object-utils.js:62",
+    "sampledSelfMs": 68
+  },
+  {
+    "frame": "parseDataRowMessage @ dist/parser.js:228",
+    "sampledSelfMs": 65
+  },
+  {
+    "frame": "attach @ src/assemble.ts:1",
+    "sampledSelfMs": 64
+  },
+  {
+    "frame": "visitNode @ operation-node/operation-node-visitor.js:110",
+    "sampledSelfMs": 51
+  },
+  {
+    "frame": "_handleDataRow @ lib/client.js:455",
+    "sampledSelfMs": 48
+  },
+  {
+    "frame": "emit @ node:events:489",
+    "sampledSelfMs": 40
+  },
+  {
+    "frame": "handlePacket @ dist/parser.js:91",
+    "sampledSelfMs": 37
+  },
+  {
+    "frame": "parse @ dist/parser.js:26",
+    "sampledSelfMs": 34
+  },
+  {
+    "frame": "writev @ :0",
+    "sampledSelfMs": 33
+  },
+  {
+    "frame": "visitRaw @ query-compiler/default-query-compiler.js:364",
+    "sampledSelfMs": 31
+  },
+  {
+    "frame": "(anonymous) @ :0",
+    "sampledSelfMs": 31
+  },
+  {
+    "frame": "(anonymous) @ dist/index.js:12",
+    "sampledSelfMs": 22
+  },
+  {
+    "frame": "collect @ src/planner.ts:1",
+    "sampledSelfMs": 22
+  },
+  {
+    "frame": "addInt32PrefixedString @ dist/buffer-writer.js:63",
+    "sampledSelfMs": 19
+  },
+  {
+    "frame": "fetchChunk @ src/execute.ts:1",
+    "sampledSelfMs": 18
+  },
+  {
+    "frame": "addFields @ lib/result.js:82",
+    "sampledSelfMs": 11
+  }
+]
