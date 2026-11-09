@@ -1,4 +1,4 @@
-# Selecting columns and JSON values
+# Selecting columns and decoding values
 
 ```ts
 const rows = await relations
@@ -29,10 +29,9 @@ optional selected properties because their runtime contents are not guaranteed.
 Omitting a list selects the complete row. An empty list emits an empty object,
 or only that row's requested nested relations.
 
-Child columns needed to correlate further nested relations stay inside the SQL
-subquery. JSON object construction exposes only selected fields and requested
-relations. Root source keys need not be exposed by a native root selection because
-SQL can still reference them.
+The loader fetches any additional keys it needs to attach relations and removes
+them from the result. Each returned row exposes the selected fields and
+requested relations.
 
 Filters, ordering and stable tie-breakers may use unselected columns. Aliases,
 wildcards and expressions inside the `select` option are not implemented. Native
@@ -41,8 +40,10 @@ Use relation `select` instead of modifying a child callback's selection.
 
 ## JSON values
 
-Nested relations are decoded from PostgreSQL JSON, not from individual pg scalar
-columns. Their types use the exported recursive `JsonValue<T>` transformation:
+Flat loading uses the driver’s normal decoding for root and nested columns
+and computed fields. The single strategy also uses driver decoding for roots,
+and uses PostgreSQL JSON decoding for nested results. Its nested types use
+the exported recursive `JsonValue<T>` transformation.
 
 | Declared child type           | Nested JSON value                                         |
 | ----------------------------- | --------------------------------------------------------- |
@@ -51,9 +52,6 @@ columns. Their types use the exported recursive `JsonValue<T>` transformation:
 | `bigint`                      | JSON number.                                              |
 | Arrays/objects                | Recursively JSON-shaped values.                           |
 | String, number, boolean, null | Corresponding JSON scalar.                                |
-
-Root scalar columns retain the driver’s normal decoding. Nested relation values
-use PostgreSQL JSON decoding.
 
 PostgreSQL JSON serializes int8/numeric as numbers regardless of pg's scalar type
 parsers. Standard JSON parsing can lose precision for large integers/decimals.

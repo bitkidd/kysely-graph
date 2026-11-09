@@ -1,8 +1,9 @@
 # @bitkidd/kysely-graph
 
 Typed nested PostgreSQL queries for Kysely. Fetch related rows and computed
-fields in **one SQL statement**, with Kysely's usual filtering, ordering,
-pagination, and execution methods.
+fields with **flat SQL batches** and assemble the graph in memory. The default
+uses the PostgreSQL driver's column decoders. A single-statement strategy
+is available for SQL composition.
 
 Requires **Node.js 24.x**, **Kysely 0.29.x**, and PostgreSQL. PGlite is used for local
 tests.
@@ -55,8 +56,7 @@ const query = graph
   .orderBy('users.id')
   .limit(20);
 
-const compiled = query.compile(); // SQL and parameters; no database I/O.
-const users = await query.execute(); // One statement, including roots and children.
+const users = await query.execute(); // Fetch roots, then load relations in batches.
 ```
 
 Each user gets up to five published posts and a count of all their published
@@ -66,8 +66,9 @@ relations. See [computed fields](docs/api.md#computed-fields).
 Pass `createGraph(db, [userRelations, postRelations])` to combine schemas
 defined in separate files. See [combining schemas](docs/relations.md#combining-schemas).
 
-Nested values follow PostgreSQL JSON serialization, including timestamp strings.
-Root scalar columns retain normal driver decoding. See [JSON types](docs/selecting-columns.md#json-values).
+Flat loading defaults to 500 distinct parent keys per batch and four concurrent
+statements per graph instance. Set `strategy: 'single'` for a composable Kysely
+query with nested PostgreSQL JSON values. [Configuration](docs/configuration.md)
 
 ## Documentation
 

@@ -17,7 +17,7 @@ export type RuntimeDB = Kysely<any>;
 export type RuntimeQuery = SelectQueryBuilder<any, any, any>;
 
 const valueColumn = 'krlinternalvalue';
-const ref = (table: string, column: string) => sql.ref(`${table}.${column}`);
+export const ref = (table: string, column: string) => sql.ref(`${table}.${column}`);
 const aliasLength = (name: string) => Buffer.byteLength(name, 'utf8');
 
 function applyCallback(
@@ -83,7 +83,7 @@ function matchKeys(
   return query;
 }
 
-function selectColumns(
+export function selectColumns(
   query: RuntimeQuery,
   table: string,
   columns?: readonly string[],
@@ -111,9 +111,13 @@ export function compileGraph(
   table: string,
   fields: Selection[],
   selection?: readonly string[],
-): RuntimeQuery {
+  flat = false,
+) {
   const plugins = db.getExecutor().plugins;
   const untransformed = db.withoutPlugins();
+  const targets = new Map<Edge, RuntimeQuery>();
+  const junctions = new Map<Edge, RuntimeQuery>();
+  const computed = new Map<Selection, RawBuilder<unknown>>();
   let nextAlias = 0;
   const internalAlias = () => `krlinternalrow${++nextAlias}`;
 
@@ -128,18 +132,25 @@ export function compileGraph(
         `Computed field ${table}.${field.name} must return a Kysely expression. Use $asScalar() for subqueries`,
       );
     }
-    return sql`(${expression})`;
+    const value = sql`(${expression})`;
+    computed.set(field, value);
+    return value;
   }
 
-  function throughPredicate(edge: Edge, junction: NonNullable<Edge['junction']>, parent: string) {
-    const junctionAlias = internalAlias();
+  function junctionQuery(edge: Edge, junction: NonNullable<Edge['junction']>) {
     const filtered = childQuery(
       junction.table,
       `${edge.source}.${edge.name}.through`,
       edge.options.through,
       junction.definitionQuery,
     );
+    junctions.set(edge, filtered);
+    return filtered;
+  }
 
+  function throughPredicate(edge: Edge, junction: NonNullable<Edge['junction']>, parent: string) {
+    const junctionAlias = internalAlias();
+    const filtered = junctionQuery(edge, junction);
     // EXISTS deduplicates links before the child query applies its limit.
     let links = db.selectFrom(filtered.as(junctionAlias)).select(sql`1`.as('krlinternalone'));
     links = matchKeys(links, junctionAlias, junction.source, parent, edge.sourceColumns);
@@ -164,16 +175,31 @@ export function compileGraph(
       : sql`(${selected.select(outputValue.as(valueColumn))})`;
   }
 
-  function relation(edge: Edge, parent: string): RawBuilder<unknown> {
-    const { target, junction, options, children } = edge;
-    let query = childQuery(
+  function targetQuery(edge: Edge) {
+    const { target, options } = edge;
+    const query = childQuery(
       target,
       `${edge.source}.${edge.name}.query`,
       options.query,
       edge.definitionQuery,
       isToMany(edge) ? edge : undefined,
     );
+    targets.set(edge, query);
+    return query;
+  }
 
+  function prepareFlat(edge: Edge) {
+    targetQuery(edge);
+    if (edge.junction) junctionQuery(edge, edge.junction);
+    for (const child of edge.children) {
+      if (child.kind === 'computed') fieldValue(child, edge.target);
+      else prepareFlat(child);
+    }
+  }
+
+  function relation(edge: Edge, parent: string): RawBuilder<unknown> {
+    const { target, junction, options, children } = edge;
+    let query = targetQuery(edge);
     query = junction
       ? query.where(throughPredicate(edge, junction, parent))
       : matchKeys(query, target, edge.targetColumns, parent, edge.sourceColumns);
@@ -243,6 +269,10 @@ export function compileGraph(
 
   let query = selectColumns(db.selectFrom(table), table, selection);
   for (const field of fields) {
+    if (flat && field.kind !== 'computed') {
+      prepareFlat(field);
+      continue;
+    }
     if (aliasLength(field.name) > 63 || field.name === '__proto__') {
       const kind = field.kind === 'computed' ? 'computed field' : 'relation';
       throw new GraphError(
@@ -251,5 +281,7 @@ export function compileGraph(
     }
     query = query.select(fieldValue(field, table).as(field.name));
   }
-  return query;
+  return { query, targets, junctions, computed };
 }
+
+export type PreparedGraph = ReturnType<typeof compileGraph>;

@@ -1,6 +1,6 @@
 # Querying graphs
 
-## Build a single query
+## Build a graph query
 
 ```ts
 const query = relations.query({
@@ -24,27 +24,37 @@ const result = await query
   .execute();
 ```
 
-`query()` returns a typed Kysely `SelectQueryBuilder` with nested JSON selections.
-Normal root `.where()`, `.orderBy()`, `.limit()`, `.offset()` and selection methods
-keep Kysely semantics and table scope. `.execute()` includes both roots and their
-relations in one SQL statement. No preliminary root SELECT is needed.
+`query()` returns a typed `FlatQueryBuilder` by default. It fetches roots,
+batches distinct parent keys for each relation, and assembles the graph in
+memory. The driver decodes every selected column directly, including nested
+columns and computed fields. An empty root result skips relation queries.
 
-Use `.executeTakeFirst()` for a row or `undefined`, and
-`.executeTakeFirstOrThrow()` for Kysely's normal missing-result error.
-`.compile()` returns parameterized SQL without executing it. The builder is
-immutable: a chained method returns another builder and the original can be reused.
-Use Kysely’s `db.selectFrom()` to embed the graph as a subquery. The declared
-relation names are its output column names. When embedding a graph, keep those
-names distinct from the selected root columns. If a root column shares a relation
-name, exclude that column with the root `select` list or rename the relation.
+Use root predicates, selections, inner joins, ordering, and pagination on
+the builder. Use `.executeTakeFirst()` for a row or `undefined` and
+`.executeTakeFirstOrThrow()` for Kysely's missing-result error. Both load
+relations for the first root. Chaining returns a new builder.
+
+Sibling relations and batches can run concurrently. See
+[configuration](configuration.md) for batch size, concurrency, and
+transaction behavior.
+
+## Single-statement queries
+
+Pass `strategy: 'single'` to get a Kysely `SelectQueryBuilder`. It supports
+`.compile()`, `.explain()`, streaming, and embedding in another query.
+Nested values use PostgreSQL JSON decoding.
 
 ```ts
+const single = createGraph(db, definitions, { strategy: 'single' });
+const query = single.query({ table: 'users', with: { posts: true } });
 const rows = await db.selectFrom(query.as('userGraph')).selectAll().execute();
 ```
 
-Root pagination operates on root rows; JSON child collections do not multiply
-root rows. A child filter changes only that collection. If you need to filter
-roots based on a relation, express the root predicate explicitly with Kysely.
+When embedding a graph, keep relation names distinct from the selected root
+columns. Set the root `select` list or rename a relation if the names overlap.
+
+Root pagination applies before child collections are loaded. To filter roots
+based on a relation, express the root predicate explicitly with Kysely.
 
 ## Child filters and correlated subqueries
 
@@ -105,7 +115,8 @@ before the target limit applies.
 
 To-many relations return `[]` when empty. To-one relations return `null`. A null
 mapping component does not match a target, following SQL equality semantics.
-To-one relations use scalar subqueries: PostgreSQL raises cardinality violation
-`21000` if more than one target matches. The original database error propagates.
+Multiple matches for a to-one relation raise an error with code `21000`. Batched
+execution detects this while assembling the graph. Single-statement execution
+propagates the PostgreSQL error.
 
 [Documentation index](README.md)

@@ -43,7 +43,7 @@ The external fixture drops/recreates its public test tables: use a disposable
 database. With `DATABASE_URL` unset, tests use PGlite and require no Docker.
 Individual Node test cases run in-process with PGlite and the reporter.
 
-Tests verify one-statement query counts, all relation kinds, nested predicates,
+Tests verify batch sizes and statement counts, all relation kinds, nested predicates,
 self-relations, repeated-table scopes, composite keys, null/empty cases, duplicate
 junctions, stable limits, column selections, mutation independence, Kysely subqueries,
 JSON scalar types, diagnostics, transactions and exact TypeScript inference.
@@ -56,6 +56,7 @@ JSON scalar types, diagnostics, transactions and exact TypeScript inference.
 | `src/types.ts`       | Query, JSON result and diagnostic types.                        |
 | `src/planner.ts`     | Graph validation and key mapping.                               |
 | `src/query.ts`       | Parameterized PostgreSQL JSON compiler and alias scopes.        |
+| `src/batch.ts`       | Relation batches, concurrency, and graph assembly.              |
 | `src/graph.ts`       | Factory and Kysely execution wrapper.                           |
 | `src/diagnostics.ts` | Query diagnostics and observer delivery.                        |
 | `tests/`             | Runtime and type regression coverage.                           |

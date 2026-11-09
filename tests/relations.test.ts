@@ -18,7 +18,7 @@ before(async () => {
 after(async () => {
   await f?.db.destroy();
 });
-test('all relation kinds and computed root columns use one statement', async () => {
+test('all relation kinds and computed root columns load in batches', async () => {
   f.queries.length = 0;
   const result = await createGraph(f.db, relations)
     .query({
@@ -36,7 +36,10 @@ test('all relation kinds and computed root columns use one statement', async () 
     .orderBy('users.id')
     .execute();
 
-  assert.equal(f.queries.length, 1);
+  assert.equal(f.queries.length, 6);
+  assert.ok(
+    f.queries.every((query) => !/\b(?:row_to_json|jsonb?_(?:agg|build_object))\s*\(/i.test(query)),
+  );
   assert.equal(result[0]!.computed, 'retained');
   assert.equal(result[0]!.profile?.bio, 'Hello');
   assert.equal(result[1]!.profile, null);
@@ -78,7 +81,6 @@ test('computed arguments bind independently in root and nested selections', asyn
     })
     .where('posts.id', 'in', [10, 11, 12])
     .orderBy('posts.id');
-  assert.ok(root.compile().parameters.includes(true));
   assert.deepEqual(await root.execute(), [
     { id: 10, commentsCount: 1, recent: true },
     { id: 11, commentsCount: 0, recent: true },
@@ -103,17 +105,16 @@ test('computed arguments bind independently in root and nested selections', asyn
       },
     })
     .where('users.id', '=', 1);
-  assert.ok(nested.compile().parameters.includes(false));
   assert.deepEqual(await nested.executeTakeFirstOrThrow(), {
     posts: [
       { commentsCount: 0, recent: false },
       { commentsCount: 1, recent: false },
     ],
   });
-  assert.equal(f.queries.length, 1);
+  assert.equal(f.queries.length, 2);
   assert.deepEqual(
     diagnostics.flatMap((event) => (event.type === 'query' ? [event.relationPaths] : [])),
-    [[], [['users', 'posts']]],
+    [[], [], [['users', 'posts']]],
   );
 
   assert.throws(
@@ -126,7 +127,7 @@ test('computed arguments bind independently in root and nested selections', asyn
   );
 });
 
-test('nested computed fields support long JSON keys', async () => {
+test('nested computed fields support long field names', async () => {
   const longName = 'computed_timestamp_'.repeat(5);
   const definitions = defineGraph<DB>()(({ computed }) => ({
     posts: {
@@ -211,8 +212,8 @@ test('per-parent limits rank after filters with stable tie-breakers', async () =
     result.map((u) => u.posts.map((p) => p.id)),
     [[10], [20], []],
   );
-  assert.equal(f.queries.length, 1);
-  assert.match(f.queries[0]!, /limit/);
+  assert.equal(f.queries.length, 3);
+  assert.match(f.queries[1]!, /limit/);
 });
 
 test('many-to-many query/through filters, deduplication and limits', async () => {
@@ -267,7 +268,7 @@ test('dedup happens before ranking so duplicate links do not consume slots', asy
   );
 });
 
-test('one SQL statement preserves independent duplicate-parent graphs', async () => {
+test('batched loading preserves independent duplicate-parent graphs', async () => {
   const graph = createGraph(f.db, relations);
   f.queries.length = 0;
   const result = await graph
@@ -280,7 +281,7 @@ test('one SQL statement preserves independent duplicate-parent graphs', async ()
     .where('copies.id', 'in', [10, 11])
     .orderBy('copies.id')
     .execute();
-  assert.equal(f.queries.length, 1);
+  assert.equal(f.queries.length, 3);
   assert.notEqual(result[0]!.posts, result[1]!.posts);
   assert.notEqual(result[0]!.posts[0], result[1]!.posts[0]);
   assert.notEqual(result[0]!.posts[0]!.tags[0], result[1]!.posts[0]!.tags[0]);
@@ -311,7 +312,7 @@ test('composite keys and custom primary keys keep distinct parents', async () =>
     [[1], [2]],
   );
   assert.equal(result[0]!.items[0]!.parent?.title, 'one');
-  assert.equal(f.queries.length, 1);
+  assert.equal(f.queries.length, 4);
 });
 
 test('callback OR conditions cannot escape parent-key restrictions', async () => {
@@ -436,7 +437,7 @@ test('unknown relations and unsafe callbacks fail before executing', () => {
   assert.equal(f.queries.length, 0);
 });
 
-test('hasOne reports cardinality violations', async () => {
+test('hasOne reports cardinality violations before returning a root', async () => {
   const definitions = defineGraph<DB>()(({ hasOne }) => ({
     users: { post: hasOne('posts', { foreignKey: 'authorId' }) },
   }));
@@ -444,8 +445,8 @@ test('hasOne reports cardinality violations', async () => {
     createGraph(f.db, definitions)
       .query({ table: 'users', with: { post: true } })
       .where('id', '=', 1)
-      .execute(),
-    /more than one row/,
+      .executeTakeFirstOrThrow(),
+    { message: /more than one row/, code: '21000' },
   );
 });
 
@@ -579,7 +580,7 @@ test('definition filters isolate polymorphic targets and junctions with overlapp
   }
 });
 
-test('reused to-one targets own independent nested graphs after mutation', async () => {
+test('reused to-one graphs stay independent after mutation', async () => {
   const graph = createGraph(f.db, relations);
   const result = await graph
     .query({
@@ -646,13 +647,21 @@ test('many-to-many targets and repeated root keys never share mutable nested res
   assert.notEqual(next.posts[0], first[0]);
 });
 
-test('prototype-named nested relations remain own properties', async () => {
+test('prototype-named flat relations remain own properties', async () => {
   const definitions = defineGraph<DB>()(({ hasMany, belongsTo }) => ({
     users: { posts: hasMany('posts', { foreignKey: 'authorId' }) },
     posts: { ['__proto__']: belongsTo('users', { foreignKey: 'authorId' }) },
   }));
   const graph = createGraph(f.db, [definitions]);
-  assert.throws(() => graph.query({ table: 'posts', with: { ['__proto__']: true } }), /__proto__/);
+  const single = createGraph(f.db, definitions, { strategy: 'single' });
+  assert.throws(() => single.query({ table: 'posts', with: { ['__proto__']: true } }), /__proto__/);
+
+  const root = await graph
+    .query({ table: 'posts', select: [], with: { ['__proto__']: { select: ['id'] } } })
+    .where('id', '=', 10)
+    .executeTakeFirstOrThrow();
+  assert.equal(Object.getPrototypeOf(root), Object.prototype);
+  assert.deepEqual(root, { ['__proto__']: { id: 1 } });
 
   const result = await graph
     .query({
@@ -720,9 +729,9 @@ test('selected queries omit wide columns in SQL and can filter/order on unselect
     .where('users.id', '=', 1)
     .executeTakeFirstOrThrow();
   assert.deepEqual(result.posts, [{ title: 'A' }]);
-  const query = f.queries[0]!;
-  assert.match(query, /"posts"\."title" as "title"/);
-  assert.match(query, /json_agg/);
+  const query = f.queries[1]!;
+  assert.match(query, /"posts"\."title"/);
+  assert.doesNotMatch(query, /json_agg/);
   assert.doesNotMatch(query, /"posts"\.\*/);
   assert.doesNotMatch(query, /"posts"\."published" as/);
 });
@@ -799,7 +808,7 @@ test('invalid runtime selections fail before querying', () => {
   assert.equal(f.queries.length, 0);
 });
 
-test('query compiles without I/O and executes a filtered paginated graph in one statement', async () => {
+test('flat execution batches a filtered paginated graph', async () => {
   const r = createGraph(f.db, relations);
   f.queries.length = 0;
   const builder = r
@@ -825,9 +834,7 @@ test('query compiles without I/O and executes a filtered paginated graph in one 
     .where('active', '=', true)
     .orderBy('id', 'desc')
     .limit(1);
-  const compiled = builder.compile();
   assert.equal(f.queries.length, 0);
-  assert.match(compiled.sql, /json_agg/);
   const result = await builder.execute();
   assert.deepEqual(result, [
     {
@@ -839,7 +846,7 @@ test('query compiles without I/O and executes a filtered paginated graph in one 
       ],
     },
   ]);
-  assert.equal(f.queries.length, 1);
+  assert.equal(f.queries.length, 5);
 });
 test('self-relations and repeated table names keep distinct SQL scopes', async () => {
   const definitions = defineGraph<DB>()(({ belongsTo, hasMany }) => ({
@@ -912,7 +919,7 @@ test('native query supports correlated EXISTS and does not filter roots by child
     { id: 2, posts: [{ id: 20 }] },
     { id: 3, posts: [] },
   ]);
-  assert.equal(f.queries.length, 1);
+  assert.equal(f.queries.length, 2);
 });
 test('query take-first variants and empty root selections keep Kysely behavior', async () => {
   const r = createGraph(f.db, relations);
@@ -943,7 +950,7 @@ test('query take-first variants and empty root selections keep Kysely behavior',
     [{ posts: [] }],
   );
 });
-test('native composite mappings, duplicate junctions and hidden fields produce one query', async () => {
+test('flat batches handle composite mappings, junctions and hidden fields', async () => {
   f.queries.length = 0;
   const rows = await createGraph(f.db, relations)
     .query({
@@ -968,9 +975,14 @@ test('native composite mappings, duplicate junctions and hidden fields produce o
     },
     { title: 'two', items: [{ score: 8, parent: { title: 'two' } }], tags: [{ label: 'sql' }] },
   ]);
-  assert.equal(f.queries.length, 1);
+  assert.equal(f.queries.length, 4);
+  assert.ok(
+    f.queries.every((query) => !/\b(?:row_to_json|jsonb?_(?:agg|build_object))\s*\(/i.test(query)),
+  );
+  assert.ok(f.queries.some((query) => query.includes('"items"."score" as "score"')));
 });
-test('single-statement diagnostics report output root rows and independent execution IDs', async () => {
+
+test('batched diagnostics report statement rows and independent execution IDs', async () => {
   const events: GraphDiagnostic[] = [];
   const r = createGraph(f.db, relations, {
     onDiagnostic: (event) => {
@@ -980,23 +992,26 @@ test('single-statement diagnostics report output root rows and independent execu
   const builder = r
     .query({ table: 'users', with: { posts: { with: { tags: true } } } })
     .where('id', '=', 1);
-  builder.compile();
   assert.equal(events.length, 0);
   await Promise.all([builder.execute(), builder.executeTakeFirst()]);
   const summaries = events.filter((e) => e.type === 'execution');
   assert.equal(summaries.length, 2);
   assert.equal(new Set(summaries.map((e) => e.executionId)).size, 2);
   for (const summary of summaries) {
-    assert.equal(summary.queryCount, 1);
-    assert.equal(summary.rowsFetched, 1);
+    assert.equal(summary.queryCount, 3);
+    assert.equal(summary.rowsFetched, 8);
     assert.ok(summary.durationMs >= 0);
   }
   const queries = events.filter((e) => e.type === 'query');
-  assert.equal(queries.length, 2);
-  assert.deepEqual(queries[0]!.relationPaths, [
-    ['users', 'posts'],
-    ['users', 'posts', 'tags'],
-  ]);
+  assert.equal(queries.length, 6);
+  for (const summary of summaries) {
+    assert.deepEqual(
+      queries
+        .filter((event) => event.executionId === summary.executionId)
+        .map((event) => event.relationPaths),
+      [[], [['users', 'posts']], [['users', 'posts', 'tags']]],
+    );
+  }
 });
 test('diagnostics preserve query errors and isolate observer failures', async () => {
   const events: GraphDiagnostic[] = [];
@@ -1057,8 +1072,8 @@ test('oversized statements fail before querying and emit an error summary', asyn
   assert.equal(summary.queryCount, 0);
 
   assert.throws(
-    () => createGraph(f.db, relations, JSON.parse('{"chunkSize":500}')),
-    /Unknown configuration chunkSize/,
+    () => createGraph(f.db, relations, { chunkSize: 0 }),
+    /chunkSize must be a positive safe integer/,
   );
 });
 
@@ -1091,7 +1106,7 @@ test('wide nested JSON objects stay below PostgreSQL function argument limits', 
   }));
   const empty = (qb: RelationQuery<DB, 'comments'>) => qb.limit(0);
   const children = Object.fromEntries(names.map((name) => [name, { query: empty }]));
-  const row = await createGraph(f.db, definitions)
+  const row = await createGraph(f.db, definitions, { strategy: 'single' })
     .query({
       table: 'users',
       select: [],
@@ -1106,7 +1121,7 @@ test('wide nested JSON objects stay below PostgreSQL function argument limits', 
   assert.ok(names.every((name) => Array.isArray(post[name])));
 });
 
-test('nested values follow JSON serialization while root scalars keep driver decoding', async () => {
+test('flat child columns and computed fields use the same decoding as direct selections', async () => {
   type Tables = {
     documents: { id: number; ownerId: number; at: Date; payload: Uint8Array; counter: bigint };
   };
@@ -1125,11 +1140,14 @@ test('nested values follow JSON serialization while root scalars keep driver dec
       .insertInto('documents')
       .values({ id: 1, ownerId: 1, at: date, payload: new Uint8Array([0, 15, 255]), counter: 42n })
       .execute();
-    const definitions = defineGraph<DB & Tables>()(({ hasMany, belongsTo }) => ({
+    const definitions = defineGraph<DB & Tables>()(({ hasMany, belongsTo, computed }) => ({
       users: { documents: hasMany('documents', { foreignKey: 'ownerId' }) },
-      documents: { owner: belongsTo('users', { foreignKey: 'ownerId' }) },
+      documents: {
+        owner: belongsTo('users', { foreignKey: 'ownerId' }),
+        recordedAt: computed('documents', (eb) => eb.ref('documents.at')),
+      },
     }));
-    const r = createGraph(db, definitions);
+    const r = createGraph(db, definitions, { strategy: 'single' });
     const root = await r
       .query({ table: 'documents', select: ['at'], with: { owner: { select: ['name'] } } })
       .executeTakeFirstOrThrow();
@@ -1146,6 +1164,28 @@ test('nested values follow JSON serialization while root scalars keep driver dec
     assert.equal(new Date(user.documents[0]!.at).toISOString(), date.toISOString());
     assert.equal(user.documents[0]!.payload, '\\x000fff');
     assert.equal(user.documents[0]!.counter, 42);
+
+    const native = await db
+      .selectFrom('documents')
+      .select(['at', 'payload', 'counter'])
+      .executeTakeFirstOrThrow();
+    const flat = await createGraph(db, definitions)
+      .query({
+        table: 'users',
+        select: ['id'],
+        with: {
+          documents: {
+            select: ['at', 'payload', 'counter'],
+            with: { recordedAt: true, owner: { select: ['name'] } },
+          },
+        },
+      })
+      .where('id', '=', 1)
+      .executeTakeFirstOrThrow();
+    assert.deepEqual(flat, {
+      id: 1,
+      documents: [{ ...native, recordedAt: native.at, owner: { name: 'Ada' } }],
+    });
   } finally {
     await db.schema.dropTable('documents').execute();
   }
@@ -1160,7 +1200,7 @@ test('Kysely subqueries preserve declared relation names', async () => {
       [longName]: belongsTo('tags', { foreignKey: 'id' }),
     },
   }));
-  const graph = createGraph(db, definitions);
+  const graph = createGraph(db, definitions, { strategy: 'single' });
   const builder = graph
     .query({
       table: 'tags',
@@ -1252,4 +1292,122 @@ test('helper subqueries preserve expression ordering with unselected columns and
     .where('id', '=', 1)
     .executeTakeFirstOrThrow();
   assert.deepEqual(row.posts, [{ title: 'A' }]);
+});
+
+test('chunks composite keys to fit the per-statement parameter budget', async () => {
+  f.queries.length = 0;
+  const rows = await createGraph(f.db, relations, { maxParameters: 3 })
+    .query({
+      table: 'tenants',
+      select: ['title'],
+      with: {
+        items: {
+          select: ['score'],
+          query: (qb) => qb.where('score', '>=', 0).orderBy('score'),
+        },
+      },
+    })
+    .orderBy('title')
+    .execute();
+
+  assert.equal(f.queries.length, 3);
+  for (const query of f.queries.slice(1)) {
+    assert.equal(query.match(/\$[0-9]+/g)?.length, 3);
+  }
+  assert.deepEqual(
+    rows.map(({ items }) => items.map(({ score }) => score)),
+    [[5, 5], [8]],
+  );
+
+  await assert.rejects(
+    createGraph(f.db, relations, { maxParameters: 2 })
+      .query({
+        table: 'tenants',
+        with: { items: { query: (qb) => qb.where('score', '>=', 0) } },
+      })
+      .execute(),
+    /cannot fit the relation parameters and one parent key/,
+  );
+});
+
+test('shares a concurrency limit across chunks, sibling relations, and executions', async () => {
+  let active = 0;
+  let peak = 0;
+  const db = f.db.withPlugin({
+    transformQuery: ({ node }) => node,
+    async transformResult({ result }) {
+      peak = Math.max(peak, ++active);
+      await new Promise<void>((resolve) => setTimeout(resolve, 10));
+      active--;
+      return result;
+    },
+  });
+
+  f.queries.length = 0;
+  const query = createGraph(db, relations, { chunkSize: 1, concurrency: 2 })
+    .query({ table: 'users', select: ['id'], with: { profile: true, posts: true } })
+    .orderBy('users.id');
+  const [first, second] = await Promise.all([query.execute(), query.execute()]);
+  assert.deepEqual(first, second);
+  assert.equal(f.queries.length, 14);
+  assert.equal(peak, 2);
+  assert.equal(active, 0);
+
+  peak = 0;
+  await db.transaction().execute(async (trx) => {
+    await createGraph(trx, relations, { chunkSize: 1, concurrency: 2 })
+      .query({ table: 'users', select: ['id'], with: { profile: true, posts: true } })
+      .execute();
+    assert.equal(peak, 1);
+  });
+});
+
+test('single-statement execution remains available for the same builder API', async () => {
+  f.queries.length = 0;
+  const query = createGraph(f.db, relations, { strategy: 'single' })
+    .query({
+      table: 'users',
+      select: ['id'],
+      with: { posts: { select: ['title'], query: (qb) => qb.orderBy('id').limit(1) } },
+    })
+    .orderBy('id');
+  assert.match(query.compile().sql, /json_agg/);
+  assert.equal(f.queries.length, 0);
+  const result = await query.execute();
+  assert.deepEqual(
+    result.map(({ posts }) => posts),
+    [[{ title: 'A' }], [{ title: 'D' }], []],
+  );
+  assert.equal(f.queries.length, 1);
+  assert.match(f.queries[0]!, /json_agg/);
+});
+
+test('stops queued batches after an error and releases the graph query slots', async () => {
+  const events: GraphDiagnostic[] = [];
+  const graph = createGraph(f.db, relations, {
+    chunkSize: 1,
+    concurrency: 2,
+    onDiagnostic: (event) => {
+      events.push(event);
+    },
+  });
+  await assert.rejects(
+    graph
+      .query({
+        table: 'users',
+        with: {
+          posts: { query: (qb) => qb.where(sql<boolean>`krl_missing_function()`) },
+          profile: true,
+        },
+      })
+      .execute(),
+    /krl_missing_function/,
+  );
+  assert.ok(events.every((event) => event.table === 'users' || event.table === 'posts'));
+  const summary = events.at(-1);
+  assert.ok(summary?.type === 'execution' && summary.status === 'error');
+  assert.equal(summary.queryCount, 3);
+
+  const rows = await graph.query({ table: 'users', with: { profile: true } }).execute();
+  assert.equal(rows.length, 3);
 });

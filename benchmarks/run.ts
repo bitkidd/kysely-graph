@@ -4,24 +4,32 @@ import { findPackageJSON } from 'node:module';
 import { availableParallelism, cpus } from 'node:os';
 import { performance } from 'node:perf_hooks';
 
-import { CompiledQuery, Kysely, type KyselyPlugin, PostgresDialect } from 'kysely';
+import { Kysely, type KyselyPlugin, PostgresDialect } from 'kysely';
 import { Pool } from 'pg';
 
-import { aggregatedSQL, correlatedSQL, type DB, graphMethod } from './model.js';
+import { applicationBenchmark, seedApplication } from './application.js';
+import { type DB, graphMethod } from './model.js';
 import { seed } from './seed.js';
+import { sharedPoolBenchmark } from './shared-pool.js';
 
 const url = process.env.DATABASE_URL;
 if (!url)
   throw new Error(
     'Set DATABASE_URL to a PostgreSQL database where a temporary benchmark schema may be created',
   );
-const samples = Number(process.env.BENCH_SAMPLES ?? 15);
-const warmups = Number(process.env.BENCH_WARMUPS ?? 3);
+const application = process.env.BENCH_APPLICATION === '1';
+const tuneFlat = process.env.BENCH_FLAT_GRID === '1';
+const loadFlat = process.env.BENCH_SHARED_POOL === '1';
+if ([application, tuneFlat, loadFlat].filter(Boolean).length > 1)
+  throw new Error('Choose one benchmark mode');
+const samples = Number(process.env.BENCH_SAMPLES ?? (application ? 48 : 15));
+const warmups = Number(process.env.BENCH_WARMUPS ?? (application ? 12 : 3));
 const largest = Number(process.env.BENCH_ROOTS ?? 2000);
 for (const [key, value] of Object.entries({ samples, warmups, largest })) {
   if (!Number.isSafeInteger(value) || value < 1)
     throw new Error(`${key} must be a positive integer`);
 }
+if (application && largest < 200) throw new Error('Application mode needs at least 200 users');
 const schema = `krl_bench_${process.pid}_${Date.now()}`;
 const admin = new Pool({ connectionString: url, max: 1 });
 const pool = new Pool({
@@ -58,21 +66,26 @@ const scenarios = [
 ].filter(
   (s, i, all) => all.findIndex((other) => other.roots === s.roots && other.depth === s.depth) === i,
 );
-const methods = [
-  {
-    name: 'sql-correlated',
-    run: async (n: number, d: 1 | 4) =>
-      (await db.executeQuery(CompiledQuery.raw(correlatedSQL(d), [n]))).rows as unknown[],
-  },
-  {
-    name: 'sql-preaggregated',
-    run: async (n: number, d: 1 | 4) =>
-      (await db.executeQuery(CompiledQuery.raw(aggregatedSQL(d), [n]))).rows as unknown[],
-  },
-  { name: 'relations-query', run: graphMethod(db) },
-];
+const flatDefault = { chunkSize: 500, concurrency: 4 };
+const flatGrid = [flatDefault];
+for (const chunkSize of [250, 500, 1000, 2000]) {
+  for (const concurrency of [2, 4, 8]) {
+    if (chunkSize !== flatDefault.chunkSize || concurrency !== flatDefault.concurrency) {
+      flatGrid.push({ chunkSize, concurrency });
+    }
+  }
+}
+const methods = tuneFlat
+  ? flatGrid.map((config) => ({
+      name: `flat-${config.chunkSize}-c${config.concurrency}`,
+      run: graphMethod(db, config === flatDefault ? undefined : config),
+      config,
+    }))
+  : [
+      { name: 'single', run: graphMethod(db, { strategy: 'single' }) },
+      { name: 'flat', run: graphMethod(db) },
+    ];
 const results: Record<string, unknown>[] = [];
-const plans: Record<string, unknown> = {};
 const quantile = (values: number[], q: number) =>
   values[Math.max(0, Math.ceil(values.length * q) - 1)]!;
 
@@ -89,6 +102,7 @@ try {
   created = true;
   console.log(`Seeding ${largest} roots in isolated schema ${schema} ...`);
   await seed(pool, largest);
+  if (application) await seedApplication(pool, largest);
   // Open every pooled connection before measurement so connection setup is excluded.
   const connections = await Promise.all(Array.from({ length: 10 }, () => pool.connect()));
   for (const client of connections) {
@@ -110,8 +124,28 @@ try {
       "select name,setting,unit from pg_settings where name in ('shared_buffers','work_mem','jit','max_parallel_workers_per_gather') order by name",
     )
   ).rows;
-  for (const scenario of scenarios) {
+  const runSharedPool = loadFlat
+    ? sharedPoolBenchmark(pool, graphMethod(db), () => queries, samples, warmups)
+    : undefined;
+  if (application) {
+    results.push(
+      ...(await applicationBenchmark(
+        pool,
+        db,
+        largest,
+        () => queries,
+        samples,
+        warmups,
+        flatDefault.concurrency,
+      )),
+    );
+  }
+  for (const scenario of application ? [] : scenarios) {
     console.log(`\n${scenario.name}: depth ${scenario.depth}, ${scenario.roots} roots`);
+    if (runSharedPool) {
+      results.push(...(await runSharedPool(scenario)));
+      continue;
+    }
     let reference: unknown[] | undefined;
     let outputBytes = 0;
     const profiles: Record<
@@ -147,11 +181,10 @@ try {
       for (const method of methods) await method.run(scenario.roots, scenario.depth);
     const durations = new Map(methods.map((m) => [m.name, [] as number[]]));
     const cpu = new Map(methods.map((m) => [m.name, [] as number[]]));
-    // Rotate and reverse method order to reduce cache/thermal/order bias.
+    // Rotate which configuration runs first to reduce ordering bias.
     for (let round = 0; round < samples; round++) {
       const offset = round % methods.length;
       const order = [...methods.slice(offset), ...methods.slice(0, offset)];
-      if (round % 2) order.reverse();
       for (const method of order) {
         global.gc?.();
         queries = 0;
@@ -180,6 +213,7 @@ try {
         depth: scenario.depth,
         objects: scenario.roots * (scenario.depth === 1 ? 6 : 130),
         method: method.name,
+        ...('config' in method ? method.config : {}),
         medianMs: quantile(times, 0.5),
         p95Ms: quantile(times, 0.95),
         minMs: times[0],
@@ -188,20 +222,12 @@ try {
         outputBytes,
         ...profiles[method.name],
         samplesMs: times,
+        samplesNodeCpuMs: cpuTimes,
       };
       results.push(result);
       console.log(
-        `  ${method.name.padEnd(20)} median ${result.medianMs.toFixed(1)} ms; p95 ${result.p95Ms.toFixed(1)} ms; ${result.queries} queries`,
+        `  ${method.name.padEnd(8)} median ${result.medianMs.toFixed(1)} ms; p95 ${result.p95Ms.toFixed(1)} ms; Node CPU ${result.medianNodeCpuMs.toFixed(1)} ms; ${result.queries} queries`,
       );
-    }
-    for (const [name, query] of [
-      ['correlated', correlatedSQL(scenario.depth)],
-      ['preaggregated', aggregatedSQL(scenario.depth)],
-    ] as const) {
-      const plan = await pool.query(`explain (analyze,buffers,format json) ${query}`, [
-        scenario.roots,
-      ]);
-      plans[`${scenario.name}-${name}`] = { sql: query, plan: plan.rows[0]['QUERY PLAN'] };
     }
   }
   const output = {
@@ -217,24 +243,39 @@ try {
       poolMax: 10,
       samples,
       warmups,
-      forcedGC: typeof global.gc === 'function',
+      forcedGC: !application && typeof global.gc === 'function',
       seedRoots: largest,
+      ...(tuneFlat || loadFlat || application ? { flatDefault } : {}),
       settings,
-      branches: {
-        posts: 4,
-        commentsPerPost: 4,
-        repliesPerComment: 2,
-        reactionsPerReply: 2,
-        tagsPerPost: 3,
-      },
-      scope: `Warm-cache, one request at a time, ${transport}. Timings include root rows and exclude final JSON serialization. Logical result bytes measure the JSON size of database result rows. Node CPU excludes PostgreSQL CPU.`,
+      ...(application
+        ? {
+            scope: `Warm-cache bursts of projected, paginated application queries on synthetic data, ${transport}. Each strategy reuses one graph instance and the same pool. Wave CPU is averaged per request and excludes PostgreSQL CPU. Final JSON serialization is outside the measurement.`,
+          }
+        : {
+            branches: {
+              posts: 4,
+              commentsPerPost: 4,
+              repliesPerComment: 2,
+              reactionsPerReply: 2,
+              tagsPerPost: 3,
+            },
+            scope: loadFlat
+              ? `Warm-cache bursts sharing one flat graph instance and pool, ${transport}. Request latency includes waiting for graph query slots. Wave CPU is averaged per request and excludes PostgreSQL CPU. Final JSON serialization is outside the measurement.`
+              : `Warm-cache, one request at a time, ${transport}. Timings include root rows and exclude final JSON serialization. Logical result bytes measure the JSON size of database result rows. Node CPU excludes PostgreSQL CPU.`,
+          }),
     },
     results,
   };
   await mkdir('benchmarks/results', { recursive: true });
-  await writeFile('benchmarks/results/latest.json', JSON.stringify(output, null, 2) + '\n');
-  await writeFile('benchmarks/results/plans.json', JSON.stringify(plans, null, 2) + '\n');
-  console.log('\nSaved benchmarks/results/latest.json and plans.json');
+  const outputPath = application
+    ? 'benchmarks/results/application.json'
+    : loadFlat
+      ? 'benchmarks/results/flat-shared-pool.json'
+      : tuneFlat
+        ? 'benchmarks/results/flat-tuning.json'
+        : 'benchmarks/results/latest.json';
+  await writeFile(outputPath, JSON.stringify(output, null, 2) + '\n');
+  console.log(`\nSaved ${outputPath}`);
 } finally {
   await pool.end();
   if (created) await admin.query(`drop schema "${schema}" cascade`);

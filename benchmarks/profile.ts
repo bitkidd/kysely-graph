@@ -22,7 +22,7 @@ try {
   created = true;
   await seed(pool, 2000);
   const name = 'single-query';
-  const run = graphMethod(db);
+  const run = graphMethod(db, { strategy: 'single' });
   await mkdir('benchmarks/results/profiles', { recursive: true });
   for (let i = 0; i < 2; i++) await run(2000, 4);
   global.gc?.();

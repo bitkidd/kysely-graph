@@ -1,0 +1,758 @@
+{
+  "metadata": {
+    "createdAt": "2026-11-09T21:22:53.260Z",
+    "node": "v24.20.0",
+    "postgres": "PostgreSQL 14.13 (Homebrew) on aarch64-apple-darwin24.1.0, compiled by Apple clang version 16.0.0 (clang-1600.0.26.4), 64-bit",
+    "kysely": "0.29.8",
+    "pg": "8.23.1",
+    "transport": "Unix socket",
+    "cpu": "Apple M1 Pro",
+    "availableCPUs": 10,
+    "poolMax": 10,
+    "samples": 15,
+    "warmups": 3,
+    "forcedGC": true,
+    "seedRoots": 2000,
+    "flatDefault": {
+      "chunkSize": 500,
+      "concurrency": 4
+    },
+    "settings": [
+      {
+        "name": "jit",
+        "setting": "off",
+        "unit": null
+      },
+      {
+        "name": "max_parallel_workers_per_gather",
+        "setting": "2",
+        "unit": null
+      },
+      {
+        "name": "shared_buffers",
+        "setting": "16384",
+        "unit": "8kB"
+      },
+      {
+        "name": "work_mem",
+        "setting": "4096",
+        "unit": "kB"
+      }
+    ],
+    "branches": {
+      "posts": 4,
+      "commentsPerPost": 4,
+      "repliesPerComment": 2,
+      "reactionsPerReply": 2,
+      "tagsPerPost": 3
+    },
+    "scope": "Warm-cache bursts sharing one flat graph instance and pool, Unix socket. Request latency includes waiting for graph query slots. Wave CPU is averaged per request and excludes PostgreSQL CPU. Final JSON serialization is outside the measurement."
+  },
+  "results": [
+    {
+      "scenario": "deep-2000",
+      "roots": 2000,
+      "depth": 4,
+      "requests": 1,
+      "queriesPerRequest": 233,
+      "medianMs": 348.0037500000035,
+      "p95Ms": 364.09354200000234,
+      "medianNodeCpuMsPerRequest": 547.357,
+      "medianWaveMs": 348.0118339999899,
+      "requestsPerSecond": 2.8734655040495807,
+      "peakConnections": 4,
+      "waves": [
+        {
+          "requestMs": [
+            354.68054100000154
+          ],
+          "elapsedMs": 354.6939999999995,
+          "nodeCpuMs": 547.357,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            341.50645799999984
+          ],
+          "elapsedMs": 341.51541599999837,
+          "nodeCpuMs": 528.977,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            350.98662499999773
+          ],
+          "elapsedMs": 350.99866699999984,
+          "nodeCpuMs": 562.678,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            360.70187499999884
+          ],
+          "elapsedMs": 360.7144580000022,
+          "nodeCpuMs": 549.528,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            349.69487500000105
+          ],
+          "elapsedMs": 349.7027920000037,
+          "nodeCpuMs": 559.227,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            348.20758399999613
+          ],
+          "elapsedMs": 348.21524999999383,
+          "nodeCpuMs": 558.861,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            353.0541660000017
+          ],
+          "elapsedMs": 353.0615419999958,
+          "nodeCpuMs": 562.016,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            343.15458399999625
+          ],
+          "elapsedMs": 343.16270899999654,
+          "nodeCpuMs": 569.89,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            340.24837500000285
+          ],
+          "elapsedMs": 340.2562089999992,
+          "nodeCpuMs": 531.702,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            333.7608750000072
+          ],
+          "elapsedMs": 333.7696670000005,
+          "nodeCpuMs": 525.983,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            318.0759160000016
+          ],
+          "elapsedMs": 318.0878329999978,
+          "nodeCpuMs": 511.708,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            327.55708400000003
+          ],
+          "elapsedMs": 327.56916700000875,
+          "nodeCpuMs": 516.052,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            364.09354200000234
+          ],
+          "elapsedMs": 364.10245799999393,
+          "nodeCpuMs": 568.337,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            323.84754200000316
+          ],
+          "elapsedMs": 323.8557920000021,
+          "nodeCpuMs": 515.413,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            348.0037500000035
+          ],
+          "elapsedMs": 348.0118339999899,
+          "nodeCpuMs": 536.851,
+          "peakConnections": 4
+        }
+      ]
+    },
+    {
+      "scenario": "deep-2000",
+      "roots": 2000,
+      "depth": 4,
+      "requests": 2,
+      "queriesPerRequest": 233,
+      "medianMs": 606.1124580000032,
+      "p95Ms": 699.2322910000003,
+      "medianNodeCpuMsPerRequest": 438.975,
+      "medianWaveMs": 610.1150419999976,
+      "requestsPerSecond": 3.2780703020267574,
+      "peakConnections": 4,
+      "waves": [
+        {
+          "requestMs": [
+            633.5221249999995,
+            642.8490829999973
+          ],
+          "elapsedMs": 643.1872089999997,
+          "nodeCpuMs": 856.106,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            699.2322910000003,
+            704.591333999997
+          ],
+          "elapsedMs": 704.8594999999987,
+          "nodeCpuMs": 931.751,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            595.8033330000035,
+            601.6391669999939
+          ],
+          "elapsedMs": 601.9044579999972,
+          "nodeCpuMs": 820.087,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            610.106749999999,
+            603.7545830000017
+          ],
+          "elapsedMs": 610.1150419999976,
+          "nodeCpuMs": 835.603,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            601.806709000004,
+            607.296334000006
+          ],
+          "elapsedMs": 607.5455000000002,
+          "nodeCpuMs": 816.498,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            612.1530829999974,
+            617.5250000000015
+          ],
+          "elapsedMs": 617.7501249999987,
+          "nodeCpuMs": 901.902,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            605.3110830000005,
+            611.643167000002
+          ],
+          "elapsedMs": 611.9205000000002,
+          "nodeCpuMs": 832.823,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            671.0044170000037,
+            677.1446660000001
+          ],
+          "elapsedMs": 677.3940419999999,
+          "nodeCpuMs": 1021.461,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            595.1128339999996,
+            605.6582920000001
+          ],
+          "elapsedMs": 605.9689999999973,
+          "nodeCpuMs": 847.95,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            600.2321670000019,
+            595.2999999999956
+          ],
+          "elapsedMs": 600.2381670000032,
+          "nodeCpuMs": 895.86,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            610.3809579999943,
+            598.6080840000068
+          ],
+          "elapsedMs": 610.3892909999995,
+          "nodeCpuMs": 982.146,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            598.3213329999999,
+            603.554250000001
+          ],
+          "elapsedMs": 603.7848329999979,
+          "nodeCpuMs": 967.886,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            608.4638330000016,
+            620.5113749999873
+          ],
+          "elapsedMs": 620.7690839999996,
+          "nodeCpuMs": 877.95,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            609.0280420000054,
+            604.3497079999943
+          ],
+          "elapsedMs": 609.0353749999922,
+          "nodeCpuMs": 902.807,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            600.5757920000033,
+            606.1124580000032
+          ],
+          "elapsedMs": 606.3475840000028,
+          "nodeCpuMs": 853.115,
+          "peakConnections": 4
+        }
+      ]
+    },
+    {
+      "scenario": "deep-2000",
+      "roots": 2000,
+      "depth": 4,
+      "requests": 4,
+      "queriesPerRequest": 233,
+      "medianMs": 1206.2455420000042,
+      "p95Ms": 1395.3437919999997,
+      "medianNodeCpuMsPerRequest": 469.89925,
+      "medianWaveMs": 1217.3560419999994,
+      "requestsPerSecond": 3.285809460828225,
+      "peakConnections": 4,
+      "waves": [
+        {
+          "requestMs": [
+            1230.2772499999992,
+            1216.9019169999992,
+            1225.584167000001,
+            1212.3718750000007
+          ],
+          "elapsedMs": 1230.2846250000002,
+          "nodeCpuMs": 1871.575,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1199.7447079999984,
+            1186.537124999999,
+            1180.9271249999983,
+            1191.1178329999966
+          ],
+          "elapsedMs": 1199.7522080000017,
+          "nodeCpuMs": 1855.016,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1219.9764160000013,
+            1193.6342919999988,
+            1213.7966670000023,
+            1208.5228339999994
+          ],
+          "elapsedMs": 1219.987000000001,
+          "nodeCpuMs": 1769.913,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1196.9958750000005,
+            1185.390833999998,
+            1190.8283750000046,
+            1205.1895829999994
+          ],
+          "elapsedMs": 1205.5675829999964,
+          "nodeCpuMs": 1862.317,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1198.6384160000016,
+            1206.8858330000003,
+            1217.0452090000035,
+            1212.4870420000007
+          ],
+          "elapsedMs": 1217.3560419999994,
+          "nodeCpuMs": 1858.701,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1205.5452500000029,
+            1194.049125000005,
+            1199.7249169999996,
+            1213.8867499999978
+          ],
+          "elapsedMs": 1214.2747910000035,
+          "nodeCpuMs": 1879.597,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1407.9225000000006,
+            1412.6911669999972,
+            1395.3437919999997,
+            1418.8057499999995
+          ],
+          "elapsedMs": 1419.1839590000018,
+          "nodeCpuMs": 1881.993,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1205.6360840000052,
+            1214.8333749999947,
+            1228.354416999995,
+            1223.2233330000017
+          ],
+          "elapsedMs": 1228.6629580000008,
+          "nodeCpuMs": 1937.01,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1198.9367089999942,
+            1193.200708000004,
+            1211.8499999999985,
+            1203.9122500000012
+          ],
+          "elapsedMs": 1212.1594579999946,
+          "nodeCpuMs": 1923.684,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1213.9587079999983,
+            1222.1482500000056,
+            1205.4429170000003,
+            1226.771000000008
+          ],
+          "elapsedMs": 1227.1474170000074,
+          "nodeCpuMs": 1926.685,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1204.1675830000022,
+            1220.195915999997,
+            1213.4232499999925,
+            1224.4779580000031
+          ],
+          "elapsedMs": 1224.8189589999965,
+          "nodeCpuMs": 1790.076,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1211.8589999999967,
+            1206.2455420000042,
+            1223.2327919999952,
+            1216.5733749999927
+          ],
+          "elapsedMs": 1223.5445420000033,
+          "nodeCpuMs": 1918.06,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1200.7975419999857,
+            1186.7927499999932,
+            1195.2741670000105,
+            1205.466791999992
+          ],
+          "elapsedMs": 1205.8598749999946,
+          "nodeCpuMs": 1908.801,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1197.0370419999963,
+            1205.3058750000055,
+            1210.776417000001,
+            1215.7333329999965
+          ],
+          "elapsedMs": 1216.1083329999965,
+          "nodeCpuMs": 1931.138,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            1197.4330829999963,
+            1183.0310420000023,
+            1192.0966669999907,
+            1202.5260830000043
+          ],
+          "elapsedMs": 1202.8659590000025,
+          "nodeCpuMs": 1766.835,
+          "peakConnections": 4
+        }
+      ]
+    },
+    {
+      "scenario": "deep-2000",
+      "roots": 2000,
+      "depth": 4,
+      "requests": 8,
+      "queriesPerRequest": 233,
+      "medianMs": 2404.9965410000004,
+      "p95Ms": 2538.467499999999,
+      "medianNodeCpuMsPerRequest": 433.83525,
+      "medianWaveMs": 2426.852500000008,
+      "requestsPerSecond": 3.2964508555835073,
+      "peakConnections": 4,
+      "waves": [
+        {
+          "requestMs": [
+            2375.063083000001,
+            2363.1059999999998,
+            2368.8151670000007,
+            2383.654333000002,
+            2390.0577909999993,
+            2394.511709000002,
+            2399.915249999998,
+            2404.9965410000004
+          ],
+          "elapsedMs": 2405.7157499999994,
+          "nodeCpuMs": 3381.328,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2342.4788340000014,
+            2353.6191670000007,
+            2347.8388339999983,
+            2361.8602500000015,
+            2367.220083,
+            2373.2577920000003,
+            2378.943207999997,
+            2384.446832999998
+          ],
+          "elapsedMs": 2385.1290420000005,
+          "nodeCpuMs": 3348.401,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2341.5117500000015,
+            2352.6769999999997,
+            2361.3499580000025,
+            2348.3909170000006,
+            2368.1899159999994,
+            2373.753625000001,
+            2377.544125000004,
+            2382.992957999999
+          ],
+          "elapsedMs": 2383.5605419999993,
+          "nodeCpuMs": 3370.888,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2503.2613749999946,
+            2507.640124999998,
+            2515.7040419999976,
+            2523.5399590000015,
+            2529.727749999998,
+            2538.467499999999,
+            2541.623584000001,
+            2547.215833000002
+          ],
+          "elapsedMs": 2547.7708330000023,
+          "nodeCpuMs": 3470.682,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2367.692041999995,
+            2373.3717499999984,
+            2379.204791999997,
+            2388.581333999995,
+            2394.660624999997,
+            2400.5658750000002,
+            2406.287458999999,
+            2411.4052500000034
+          ],
+          "elapsedMs": 2411.988624999998,
+          "nodeCpuMs": 3428.11,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2415.9563329999946,
+            2410.1881250000006,
+            2405.8096250000017,
+            2426.0908750000017,
+            2430.194000000003,
+            2435.7713749999966,
+            2446.716625000001,
+            2441.399375000001
+          ],
+          "elapsedMs": 2447.237874999999,
+          "nodeCpuMs": 3383.692,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2357.3390419999996,
+            2345.8803750000006,
+            2352.6642500000016,
+            2366.8485839999994,
+            2371.0837909999973,
+            2376.781584000004,
+            2382.4549170000028,
+            2387.6018330000006
+          ],
+          "elapsedMs": 2388.1896669999987,
+          "nodeCpuMs": 3346.481,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2393.2009169999947,
+            2400.8889169999966,
+            2406.513125000005,
+            2412.436999999998,
+            2418.1304170000003,
+            2433.9800839999953,
+            2426.972750000001,
+            2438.570375000003
+          ],
+          "elapsedMs": 2439.1816670000044,
+          "nodeCpuMs": 3437.401,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2384.6589999999997,
+            2378.9842079999944,
+            2398.5107910000006,
+            2389.7206670000014,
+            2403.8277080000043,
+            2409.2453749999986,
+            2414.615417000001,
+            2418.8748330000017
+          ],
+          "elapsedMs": 2419.4349589999983,
+          "nodeCpuMs": 3554.815,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2530.891791000002,
+            2514.7707500000106,
+            2522.1819160000014,
+            2536.266875000001,
+            2540.1701659999962,
+            2549.081290999995,
+            2558.0151250000054,
+            2561.2782080000034
+          ],
+          "elapsedMs": 2561.8287909999926,
+          "nodeCpuMs": 3645.835,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2421.3318750000035,
+            2432.8555840000045,
+            2426.9423749999987,
+            2437.8141659999965,
+            2446.6378750000003,
+            2451.7371249999997,
+            2457.3907089999993,
+            2461.8058329999913
+          ],
+          "elapsedMs": 2462.362915999998,
+          "nodeCpuMs": 3625.832,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2393.2377089999936,
+            2383.802291,
+            2397.0588750000024,
+            2405.3563339999964,
+            2409.3537499999948,
+            2414.770417000007,
+            2421.8880409999983,
+            2427.025416999997
+          ],
+          "elapsedMs": 2427.592292000001,
+          "nodeCpuMs": 3564.838,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2363.0626670000056,
+            2357.3562079999974,
+            2346.139750000002,
+            2351.8647499999934,
+            2368.1970410000067,
+            2376.648417000004,
+            2381.8567499999917,
+            2386.297999999995
+          ],
+          "elapsedMs": 2386.8296670000127,
+          "nodeCpuMs": 3518.531,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2382.7914170000004,
+            2388.9979170000006,
+            2396.110083000007,
+            2405.253542000006,
+            2412.1458339999954,
+            2415.1927080000023,
+            2420.7626670000027,
+            2426.300000000003
+          ],
+          "elapsedMs": 2426.852500000008,
+          "nodeCpuMs": 3531.744,
+          "peakConnections": 4
+        },
+        {
+          "requestMs": [
+            2423.7196669999976,
+            2399.8831669999927,
+            2408.4814580000093,
+            2414.3458329999994,
+            2428.6243749999994,
+            2434.0111659999966,
+            2439.3546249999927,
+            2444.1876249999914
+          ],
+          "elapsedMs": 2444.769250000012,
+          "nodeCpuMs": 3590.933,
+          "peakConnections": 4
+        }
+      ]
+    }
+  ]
+}

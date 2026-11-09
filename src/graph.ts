@@ -1,9 +1,16 @@
-import type { Kysely, Transaction } from 'kysely';
+import {
+  isNoResultErrorConstructor,
+  type Kysely,
+  NoResultError,
+  sql,
+  type Transaction,
+} from 'kysely';
 
+import { createBatchLoader, limitQueries, prepareFlatRoot } from './batch.js';
 import { createObserver } from './diagnostics.js';
 import { GraphError } from './errors.js';
 import { plan, type Selection } from './planner.js';
-import { compileGraph, type RuntimeDB, type RuntimeQuery } from './query.js';
+import { compileGraph, type PreparedGraph, type RuntimeDB, type RuntimeQuery } from './query.js';
 import type { Field, GraphSchema } from './schema.js';
 import type { Graph, GraphConfig } from './types.js';
 
@@ -27,6 +34,24 @@ const observedMethods = new Set([
   'explain',
 ]);
 
+const flatMethods = new Set([
+  'where',
+  'whereRef',
+  'select',
+  'innerJoin',
+  'orderBy',
+  'limit',
+  'offset',
+  'clearWhere',
+  'clearOrderBy',
+  'clearLimit',
+  'clearOffset',
+  'execute',
+  'executeTakeFirst',
+  'executeTakeFirstOrThrow',
+  'then',
+]);
+
 function mergeDefinitions(definitions: readonly GraphSchema[]): GraphSchema {
   const merged: Record<string, Record<string, Field>> = Object.create(null);
   for (const schema of definitions) {
@@ -46,17 +71,40 @@ function mergeDefinitions(definitions: readonly GraphSchema[]): GraphSchema {
 export function createGraph<DB, const S extends Definitions>(
   db: Kysely<DB> | Transaction<DB>,
   definitions: S,
+  config?: GraphConfig<'flat'>,
+): Graph<DB, MergedSchema<S>, true>;
+export function createGraph<DB, const S extends Definitions>(
+  db: Kysely<DB> | Transaction<DB>,
+  definitions: S,
+  config: GraphConfig<'single'> & { strategy: 'single' },
+): Graph<DB, MergedSchema<S>, false>;
+export function createGraph<DB, const S extends Definitions>(
+  db: Kysely<DB> | Transaction<DB>,
+  definitions: S,
+  config: GraphConfig | undefined,
+): Graph<DB, MergedSchema<S>, boolean>;
+export function createGraph<DB, const S extends Definitions>(
+  db: Kysely<DB> | Transaction<DB>,
+  definitions: S,
   config: GraphConfig = {},
-): Graph<DB, MergedSchema<S>> {
+): Graph<DB, MergedSchema<S>, boolean> {
   const maxParameters = config.maxParameters ?? 30_000;
-  if (!Number.isSafeInteger(maxParameters) || maxParameters < 1) {
-    throw new GraphError('maxParameters must be a positive safe integer');
+  const chunkSize = config.chunkSize ?? 500;
+  const concurrency = config.concurrency ?? 4;
+  const strategy = config.strategy ?? 'flat';
+  for (const [name, value] of Object.entries({ maxParameters, chunkSize, concurrency })) {
+    if (!Number.isSafeInteger(value) || value < 1) {
+      throw new GraphError(`${name} must be a positive safe integer`);
+    }
+  }
+  if (strategy !== 'flat' && strategy !== 'single') {
+    throw new GraphError('strategy must be flat or single');
   }
   if (config.onDiagnostic !== undefined && typeof config.onDiagnostic !== 'function') {
     throw new GraphError('onDiagnostic must be a function');
   }
   for (const name of Object.keys(config)) {
-    if (name !== 'maxParameters' && name !== 'onDiagnostic') {
+    if (!['maxParameters', 'chunkSize', 'concurrency', 'strategy', 'onDiagnostic'].includes(name)) {
       throw new GraphError(`Unknown configuration ${name}`);
     }
   }
@@ -66,6 +114,10 @@ export function createGraph<DB, const S extends Definitions>(
     : (definitions as GraphSchema);
   const runtime = db as RuntimeDB;
   const observe = createObserver(config.onDiagnostic);
+  const slots = db.isTransaction ? 1 : concurrency;
+  const run = limitQueries(slots);
+  const flat = strategy === 'flat';
+  const load = createBatchLoader(runtime, chunkSize, maxParameters, slots, run);
 
   function compile(query: RuntimeQuery) {
     const compiled = query.compile();
@@ -75,9 +127,16 @@ export function createGraph<DB, const S extends Definitions>(
     return compiled;
   }
 
-  function wrap(query: RuntimeQuery, table: string, fields: Selection[]): RuntimeQuery {
+  function wrap(
+    query: RuntimeQuery,
+    table: string,
+    fields: Selection[],
+    prepared: PreparedGraph,
+    flatRelations?: ReturnType<typeof prepareFlatRoot>['relations'],
+  ): RuntimeQuery {
     return new Proxy(query, {
       get(target, key) {
+        if (flatRelations && typeof key === 'string' && !flatMethods.has(key)) return;
         const method: unknown = Reflect.get(target, key, target);
         if (typeof method !== 'function') return method;
         if (key === 'compile') return () => compile(target);
@@ -85,13 +144,37 @@ export function createGraph<DB, const S extends Definitions>(
         if (typeof key === 'string' && observedMethods.has(key)) {
           return (...args: unknown[]) =>
             observe({ table, fields }, async (progress) => {
+              if (flatRelations) {
+                const first = key !== 'execute';
+                const options = (typeof args[0] === 'function' ? undefined : args[0]) as Parameters<
+                  RuntimeQuery['execute']
+                >[0];
+                const query =
+                  first && !target.toOperationNode().limit ? target.limit(sql.lit(1)) : target;
+                const rows = await load(
+                  table,
+                  { compiled: query.compile(), relations: flatRelations },
+                  prepared,
+                  progress,
+                  options,
+                  first,
+                );
+                if (!first) return rows;
+                if (rows.length || key === 'executeTakeFirst') return rows[0];
+                const makeError =
+                  typeof args[0] === 'function'
+                    ? args[0]
+                    : (args[0] as { errorConstructor?: unknown } | undefined)?.errorConstructor;
+                const constructor = (makeError ?? NoResultError) as Parameters<
+                  typeof isNoResultErrorConstructor
+                >[0];
+                const node = target.toOperationNode();
+                throw isNoResultErrorConstructor(constructor)
+                  ? new constructor(node)
+                  : constructor(node);
+              }
               compile(target);
-              progress.startQuery();
-              const result: unknown = await Reflect.apply(method, target, args);
-              progress.recordRows(
-                Array.isArray(result) ? result.length : Number(result !== undefined),
-              );
-              return result;
+              return run(() => progress.inline(() => Reflect.apply(method, target, args)));
             });
         }
 
@@ -104,7 +187,7 @@ export function createGraph<DB, const S extends Definitions>(
             'execute' in result &&
             'toOperationNode' in result
           ) {
-            return wrap(result as RuntimeQuery, table, fields);
+            return wrap(result as RuntimeQuery, table, fields, prepared, flatRelations);
           }
           return result;
         };
@@ -132,8 +215,13 @@ export function createGraph<DB, const S extends Definitions>(
       throw new GraphError('select must be an array of unqualified root column names');
     }
 
-    return wrap(compileGraph(runtime, table, fields, select), table, fields);
+    const prepared = compileGraph(runtime, table, fields, select, flat);
+    if (flat) {
+      const root = prepareFlatRoot(prepared.query, table, fields);
+      return wrap(root.query, table, fields, prepared, root.relations);
+    }
+    return wrap(prepared.query, table, fields, prepared);
   }
 
-  return { query } as Graph<DB, MergedSchema<S>>;
+  return { query } as unknown as Graph<DB, MergedSchema<S>, boolean>;
 }

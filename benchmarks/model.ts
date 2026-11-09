@@ -1,6 +1,6 @@
 import type { Kysely } from 'kysely';
 
-import { createGraph, defineGraph } from '../src/index.js';
+import { createGraph, defineGraph, type GraphConfig, type GraphStrategy } from '../src/index.js';
 
 export interface DB {
   users: { id: number; name: string; padding: string };
@@ -12,21 +12,21 @@ export interface DB {
   tags: { id: number; label: string };
   post_tags: { post_id: number; tag_id: number };
 }
-export const relations = defineGraph<DB>()(({ hasMany, hasOne, manyToMany }) => ({
+export const relations = defineGraph<DB>()(({ belongsTo, hasMany, hasOne, manyToMany }) => ({
   users: {
     profile: hasOne('profiles', { foreignKey: 'user_id' }),
     posts: hasMany('posts', { foreignKey: 'user_id' }),
   },
   posts: {
+    author: belongsTo('users', { foreignKey: 'user_id' }),
     comments: hasMany('comments', { foreignKey: 'post_id' }),
     tags: manyToMany('tags', { through: 'post_tags', sourceKey: 'post_id', targetKey: 'tag_id' }),
   },
   comments: { replies: hasMany('replies', { foreignKey: 'comment_id' }) },
   replies: { reactions: hasMany('reactions', { foreignKey: 'reply_id' }) },
 }));
-/** The current public API fetches roots and the complete graph in one query. */
-export function graphMethod(db: Kysely<DB>) {
-  const r = createGraph(db, relations);
+export function graphMethod(db: Kysely<DB>, config?: GraphConfig<GraphStrategy>) {
+  const r = createGraph(db, relations, config);
   return async (count: number, depth: 1 | 4): Promise<unknown[]> => {
     if (depth === 1)
       return r

@@ -8,14 +8,14 @@ interface Operation {
   fields: Selection[];
 }
 
-interface QueryProgress {
-  startQuery(): void;
-  recordRows(count: number): void;
+export interface QueryProgress {
+  query<T>(table: string, path: readonly string[], execute: () => Promise<T>): Promise<T>;
+  inline<T>(execute: () => Promise<T>): Promise<T>;
 }
 
 const unobserved: QueryProgress = {
-  startQuery() {},
-  recordRows() {},
+  query: (_table, _path, execute) => execute(),
+  inline: (execute) => execute(),
 };
 
 function relationPaths(table: string, fields: Selection[]): readonly (readonly string[])[] {
@@ -54,32 +54,50 @@ export function createObserver(observer: GraphConfig['onDiagnostic']) {
     const startedAt = performance.now();
     let queryCount = 0;
     let rowsFetched = 0;
-    let queryStartedAt = startedAt;
-
-    const progress: QueryProgress = {
-      startQuery() {
-        queryCount++;
-        queryStartedAt = performance.now();
-      },
-      recordRows(count) {
-        rowsFetched = count;
-      },
-    };
-
-    const finish = (outcome: { status: 'success' } | { status: 'error'; error: unknown }) => {
-      const shared = { executionId, table, rowsFetched };
-      if (queryCount) {
-        notify(observer, {
+    async function query<T>(
+      queryTable: string,
+      paths: readonly (readonly string[])[],
+      execute: () => Promise<T>,
+    ): Promise<T> {
+      queryCount++;
+      const queryStartedAt = performance.now();
+      const finish = (
+        count: number,
+        outcome: { status: 'success' } | { status: 'error'; error: unknown },
+      ) =>
+        notify(observer!, {
           type: 'query',
-          ...shared,
-          relationPaths: relationPaths(table, fields),
+          executionId,
+          table: queryTable,
+          relationPaths: paths,
+          rowsFetched: count,
           durationMs: performance.now() - queryStartedAt,
           ...outcome,
         });
+      try {
+        const result = await execute();
+        const count = Array.isArray(result) ? result.length : Number(result !== undefined);
+        rowsFetched += count;
+        finish(count, { status: 'success' });
+        return result;
+      } catch (error) {
+        finish(0, { status: 'error', error });
+        throw error;
       }
+    }
+
+    const progress: QueryProgress = {
+      query: (queryTable, path, execute) =>
+        query(queryTable, Object.freeze(path.length ? [Object.freeze(path)] : []), execute),
+      inline: (execute) => query(table, relationPaths(table, fields), execute),
+    };
+
+    const finish = (outcome: { status: 'success' } | { status: 'error'; error: unknown }) => {
       notify(observer, {
         type: 'execution',
-        ...shared,
+        executionId,
+        table,
+        rowsFetched,
         queryCount,
         durationMs: performance.now() - startedAt,
         ...outcome,

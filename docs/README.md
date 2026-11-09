@@ -1,8 +1,8 @@
 # @bitkidd/kysely-graph documentation
 
-Declare relations and computed fields once, then build a typed Kysely query
-that returns the nested result in **one PostgreSQL statement**. Apply ordinary
-Kysely filtering, ordering, and pagination to the root query.
+Declare relations and computed fields once, then build a typed graph query.
+The default loads relations in flat PostgreSQL batches and assembles them in
+memory. Use the single strategy to compose the graph as a SQL statement.
 
 Requires Node.js 24.x, Kysely 0.29.x and PostgreSQL. PGlite is used for local tests.
 See the installation guide for registry and local tarball commands.

@@ -51,7 +51,7 @@ type ComputedRoot = Assert<
 type ComputedNested = Assert<
   Equal<
     Awaited<ReturnType<typeof computedNested.execute>>[number]['posts'][number],
-    { commentsCount: number; computedDate: string; optional: number }
+    { commentsCount: number; computedDate: Date; optional: number }
   >
 >;
 // @ts-expect-error required arguments cannot use shorthand
@@ -341,17 +341,19 @@ graph.where('bogus', '=', 1);
 graph.execute().then((rows) => rows[0]!.name);
 // @ts-expect-error root selections are checked against the root table
 createGraph(db, relations).query({ table: 'users', select: ['title'], with: {} });
-// @ts-expect-error removed batch configuration is not part of single-query execution
-createGraph(db, relations, { chunkSize: 500 });
+createGraph(db, relations, { chunkSize: 500, concurrency: 4 });
+// @ts-expect-error only documented strategies are supported
+createGraph(db, relations, { strategy: 'unknown' });
 interface DateDB {
   parents: { id: number; at: Date };
   children: { id: number; parentId: number; at: Date; bytes: Uint8Array; counter: bigint };
 }
 declare const dates: Kysely<DateDB>;
-const dateRelations = defineGraph<DateDB>()(({ hasMany }) => ({
+const dateRelations = defineGraph<DateDB>()(({ hasMany, computed }) => ({
   parents: { children: hasMany('children', { foreignKey: 'parentId' }) },
+  children: { recordedAt: computed('children', (eb) => eb.ref('children.at')) },
 }));
-const datesQuery = createGraph(dates, dateRelations).query({
+const datesQuery = createGraph(dates, dateRelations, { strategy: 'single' }).query({
   table: 'parents',
   with: { children: true },
 });
@@ -360,3 +362,28 @@ type RootDate = Assert<Equal<DateGraph['at'], Date>>;
 type ChildDate = Assert<Equal<DateGraph['children'][number]['at'], string>>;
 type ChildBytes = Assert<Equal<DateGraph['children'][number]['bytes'], string>>;
 type ChildCounter = Assert<Equal<DateGraph['children'][number]['counter'], number>>;
+
+const flatDates = createGraph(dates, dateRelations)
+  .query({
+    table: 'parents',
+    select: ['id'],
+    with: {
+      children: { select: ['at', 'bytes', 'counter'], with: { recordedAt: true } },
+    },
+  })
+  .where('parents.id', '>', 0)
+  .orderBy('parents.id')
+  .limit(5);
+type FlatDates = Assert<
+  Equal<
+    Awaited<ReturnType<typeof flatDates.execute>>,
+    Array<{
+      id: number;
+      children: Array<{ at: Date; bytes: Uint8Array; counter: bigint; recordedAt: Date }>;
+    }>
+  >
+>;
+// @ts-expect-error flat queries assemble across multiple statements
+flatDates.compile();
+// @ts-expect-error root filters retain the table scope
+flatDates.where('missing', '=', 1);

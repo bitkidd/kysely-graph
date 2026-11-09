@@ -21,7 +21,7 @@ Run `nvm use`, `pnpm install --frozen-lockfile`, and `pnpm pack`. Install the
 resulting tarball alongside Kysely and pg.
 
 ```sh
-pnpm add /path/to/bitkidd-kysely-graph-0.1.1.tgz kysely pg
+pnpm add /path/to/bitkidd-kysely-graph-0.2.0.tgz kysely pg
 ```
 
 Install `@types/pg` as a development dependency when using pg in TypeScript.
@@ -105,8 +105,7 @@ const query = graph
   .orderBy('users.id')
   .limit(20);
 
-console.log(query.compile()); // No query is executed.
-const result = await query.execute(); // Exactly one statement.
+const result = await query.execute(); // Load roots and relation batches.
 ```
 
 `result` contains root `id`/`name`, `profile: { bio: string } | null`, and
@@ -115,9 +114,10 @@ Unselected internal keys do not appear in child objects. Each child predicate
 changes only its own collection, not the set of roots. Root `.limit()` and
 `.offset()` paginate users without multiplying rows through child joins.
 
-Nested timestamps and other non-JSON scalars follow PostgreSQL JSON serialization;
-see [JSON values](selecting-columns.md#json-values). For a single root, use
-`.executeTakeFirst()` or `.executeTakeFirstOrThrow()`.
+Flat loading uses the driver decoders for nested timestamps and other values.
+For a single root, use `.executeTakeFirst()` or `.executeTakeFirstOrThrow()`.
+Use [the single strategy](loading.md#single-statement-queries) to compile or
+embed the query as SQL.
 
 ## Pool lifecycle
 

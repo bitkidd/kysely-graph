@@ -2,22 +2,25 @@
 
 ```ts
 const graph = createGraph(db, definitions, {
+  chunkSize: 500,
+  concurrency: 4,
   maxParameters: 30000,
   onDiagnostic: (event) => console.log(event),
 });
 ```
 
-| Option          | Default | Meaning                                                                                            |
-| --------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `maxParameters` | `30000` | Reject a compiled graph statement exceeding the parameter budget. Must be a positive safe integer. |
-| `onDiagnostic`  | omitted | Optional readonly graph-query and operation summary observer.                                      |
+| Option          | Default  | Meaning                                                                                     |
+| --------------- | -------- | ------------------------------------------------------------------------------------------- |
+| `chunkSize`     | `500`    | Maximum distinct parent keys per relation statement.                                        |
+| `concurrency`   | `4`      | Maximum in-flight statements shared across direct executions on one graph instance.         |
+| `maxParameters` | `30000`  | Maximum bound parameters per statement.                                                     |
+| `strategy`      | `'flat'` | Fetch relation rows with native driver decoding. Use `'single'` for a composable statement. |
+| `onDiagnostic`  | omitted  | Optional observer for statement and execution events.                                       |
 
-Each graph is one statement. PostgreSQL subqueries fetch sibling relations and
-nested levels, and the connection pool handles independent executions.
-
-Compilation and ordinary execute methods enforce the parameter budget. Root and
-relation predicates and computed expressions contribute to that count. An oversized statement raises a
-`GraphError`.
+`chunkSize`, `concurrency`, and `maxParameters` must be positive safe integers.
+Relation batches shrink when composite keys, callback parameters, or computed
+expressions would exceed the parameter budget. If one key cannot fit, or a root
+or single-statement query exceeds the budget, the execution raises a `GraphError`.
 
 ## Transaction-bound queries
 
@@ -36,9 +39,10 @@ await db.transaction().execute(async (trx) => {
 ```
 
 The builder retains the supplied Kysely executor, so transaction queries see
-uncommitted writes and honor rollback. A single PostgreSQL statement reads its
-graph under one statement snapshot. Use the isolation level appropriate to other
-statements in the surrounding transaction.
+uncommitted writes and honor rollback. Transaction-bound graphs run statements
+sequentially. For a consistent snapshot across batches, use a repeatable-read
+transaction. Single-statement execution also reads the whole graph under one
+statement snapshot.
 
 Reuse the Kysely instance and pool across requests. Manage the connection pool
 in the application.
